@@ -8,8 +8,11 @@ public class FPTestTarget : TargetRules
 	public FPTestTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
-		DefaultBuildSettings = BuildSettingsVersion.V2;
-		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_1;
-		ExtraModuleNames.Add("FPTest");
+
+		// Having this set to something else may cause recompilation when working with different projects and switching between those
+        DefaultBuildSettings = BuildSettingsVersion.Latest;
+        IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
+
+        ExtraModuleNames.Add("FPTest");
 	}
 }
