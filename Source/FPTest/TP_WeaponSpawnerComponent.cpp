@@ -11,10 +11,10 @@ void UTP_WeaponSpawnerComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	Server_SpawnWeapon();
+	SpawnWeapon();
 }
 
-void UTP_WeaponSpawnerComponent::Server_SpawnWeapon_Implementation()
+void UTP_WeaponSpawnerComponent::SpawnWeapon()
 {
 	UWorld* const World = GetWorld();
 	if (!World)
@@ -24,7 +24,7 @@ void UTP_WeaponSpawnerComponent::Server_SpawnWeapon_Implementation()
 
 	//Set Spawn Collision Handling Override
 	FActorSpawnParameters ActorSpawnParams;
-	ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
+	ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	// Spawn at the Position of the WeaponSpawnerComponent
 	// So with this the Spawner can be offset from the ActorPosition
@@ -57,12 +57,20 @@ void UTP_WeaponSpawnerComponent::OnPickUp(AFPTestCharacter* Character)
 		return;
 	}
 
+	// Only execute this on the Server
+	if (!GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	// GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("OnPickUp"));
+
 	// Add a Delegate to spawn the weapon after the delay
 
 	FTimerDelegate TimerDelegate;
 	TimerDelegate.BindLambda([&]
 	{
-		Server_SpawnWeapon();
+		SpawnWeapon();
 	});
 
 	// Add the timer to have the Respawn Delay

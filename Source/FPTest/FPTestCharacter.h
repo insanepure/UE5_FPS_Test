@@ -14,10 +14,26 @@ class UCameraComponent;
 class UAnimMontage;
 class USoundBase;
 
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthChanged, int32, NewHealth);
+
 UCLASS(config=Game)
 class AFPTestCharacter : public ACharacter
 {
 	GENERATED_BODY()
+
+public:
+	/** Delegate when the Ammo has changed */
+	UPROPERTY(BlueprintAssignable, Category = Gameplay)
+	FOnHealthChanged OnHealthChanged;
+
+	/** Max health of the player */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
+	int32 MaxHealth = 30;
+
+	// Property to replicate with RepNotify
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Gameplay)
+	int32 Health=0;
 
 	/** Pawn mesh: 1st person view (arms; seen only by self) */
 	UPROPERTY(VisibleDefaultsOnly, Category=Mesh)
@@ -47,6 +63,10 @@ protected:
 	virtual void BeginPlay();
 
 public:
+
+	/** Called when the Character receives Damage */
+	UFUNCTION(Server, reliable)
+	void Server_OnDamageTaken(uint32 Damage);
 		
 	/** Look Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))

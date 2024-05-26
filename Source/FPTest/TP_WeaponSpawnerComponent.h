@@ -30,8 +30,8 @@ protected:
 	virtual void BeginPlay() override;
 
 	/** Code to spawn the Weapon */
-	UFUNCTION(Server, reliable)
-	void Server_SpawnWeapon();
+	UFUNCTION()
+	void SpawnWeapon();
 
 	/** Callback for when the weapon is picked up */
 	UFUNCTION()

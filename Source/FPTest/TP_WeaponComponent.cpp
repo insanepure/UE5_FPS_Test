@@ -9,6 +9,8 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 
+#include "Net/UnrealNetwork.h"
+
 // Sets default values for this component's properties
 UTP_WeaponComponent::UTP_WeaponComponent()
 {
@@ -19,7 +21,62 @@ UTP_WeaponComponent::UTP_WeaponComponent()
 }
 
 
-void UTP_WeaponComponent::Fire()
+void UTP_WeaponComponent::FireSingle()
+{
+	if (ShootType != EWeaponShootType::Single)
+		return;
+
+	Fire_Internal(1.0f, 2);
+}
+
+void UTP_WeaponComponent::FireAutomatic()
+{
+	if (ShootType != EWeaponShootType::Automatic || !CanShoot)
+		return;
+
+	UWorld* const World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	CanShoot = false;
+
+	// Add a Delegate to spawn the weapon after the delay
+
+	FTimerDelegate TimerDelegate;
+	TimerDelegate.BindLambda([&]
+	{
+		CanShoot = true;
+	});
+
+	// Add the timer to have the Respawn Delay
+
+	FTimerHandle TimerHandle;
+	World->GetTimerManager().SetTimer(TimerHandle, TimerDelegate, AutomaticCooldown, false);
+
+	Fire_Internal(0.5f, 1);
+}
+
+
+void UTP_WeaponComponent::FireCharged()
+{
+	if (ShootType != EWeaponShootType::Charged)
+		return;
+
+	Fire_Internal(5.0f, 4);
+}
+
+void UTP_WeaponComponent::StartFireCharged()
+{
+	if (ShootType != EWeaponShootType::Charged)
+		return;
+
+	All_StartCharging();
+}
+
+
+void UTP_WeaponComponent::Fire_Internal(float ImpactModifier, int32 Damage)
 {
 	// GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Fire"));
 
@@ -53,6 +110,8 @@ void UTP_WeaponComponent::Fire()
 	// Reduce ammunition by one
 	CurrentAmmunition--;
 
+	OnAmmoChanged.Broadcast(CurrentAmmunition);
+
 	// This is the same logic as the Projectile firing
 	// we want to keep it as before and just transition to the line trace
 	APlayerController* PlayerController = Cast<APlayerController>(Character->GetController());
@@ -65,11 +124,11 @@ void UTP_WeaponComponent::Fire()
 	// So for line tracing, we also need the forward Vector as well as the End Location
 	const FVector EndLocation = ((ForwardVector * HitCastMaxDistance) + StartLocation);
 
-	Server_FireTrace(StartLocation, EndLocation);
+	Server_FireTrace(StartLocation, EndLocation, ImpactModifier, Damage);
 }
 
 
-void UTP_WeaponComponent::Server_FireTrace_Implementation(FVector StartLocation, FVector EndLocation)
+void UTP_WeaponComponent::Server_FireTrace_Implementation(FVector StartLocation, FVector EndLocation, float ImpactModifier, int32 Damage)
 {
 	// GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Server_FireTrace"));
 
@@ -79,28 +138,39 @@ void UTP_WeaponComponent::Server_FireTrace_Implementation(FVector StartLocation,
 		return;
 	}
 
+	// Do the line Trace going from the Start to the End
+	// This should mirror the behavior of the projectile before, but only as trace
+
+	All_FireVisual(StartLocation, EndLocation);
+
 	FHitResult OutHit;
 	FCollisionQueryParams CollisionParams;
-	if (GWorld->LineTraceSingleByProfile(OutHit, StartLocation, EndLocation, "Projectile", CollisionParams))
+	if (World->LineTraceSingleByChannel(OutHit, StartLocation, EndLocation, COLLISION_SHOTTRACE, CollisionParams))
 	{
-		if (OutHit.bBlockingHit && OutHit.Component.IsValid() && OutHit.Component->IsSimulatingPhysics())
+		if (!OutHit.bBlockingHit || !OutHit.Component.IsValid())
+			return;
+
+		AFPTestCharacter* character = Cast< AFPTestCharacter>(OutHit.GetActor());
+		if (character)
+		{
+			character->Server_OnDamageTaken(Damage);
+		}
+		else if (OutHit.Component->IsSimulatingPhysics())
 		{
 			// Just to keep the same behavior as before, we keep the Impulse
 			// Normally we would also deal damage, spawn a decal or do something else here
 			// but we keep it as that for now
-			OutHit.Component->AddImpulseAtLocation(-OutHit.ImpactNormal * HitImpulse, OutHit.Location);
-			// Also visualize
-			DrawDebugSphere(World, OutHit.Location, 10.0f, 32, FColor::Red, false, 1, 0, 1);
+			OutHit.Component->AddImpulseAtLocation(-OutHit.ImpactNormal * HitImpulse * ImpactModifier, OutHit.Location);
 		}
+		// Also visualize
+		DrawDebugSphere(World, OutHit.Location, 10.0f, 32, FColor::Red, false, 1, 0, 1);
 	}
-
-	All_FireVisual(StartLocation, EndLocation);
 }
 
 void UTP_WeaponComponent::All_FireVisual_Implementation(FVector StartLocation, FVector EndLocation)
 {
 	UWorld* const World = GetWorld();
-	if (!World)
+	if (!World || !Character)
 	{
 		return;
 	}
@@ -134,16 +204,42 @@ void UTP_WeaponComponent::Reload()
 	// There was nothing like this written in the document, so I keep it simple
 	CurrentAmmunition = MaxMagazine;
 
+	OnAmmoChanged.Broadcast(CurrentAmmunition);
+
 	All_Reload();
+}
+
+void UTP_WeaponComponent::ToggleType()
+{
+	switch (ShootType)
+	{
+	case EWeaponShootType::Single:
+		ShootType = EWeaponShootType::Automatic;
+		break;
+	case EWeaponShootType::Automatic:
+		ShootType = EWeaponShootType::Charged;
+		break;
+	case EWeaponShootType::Charged:
+		ShootType = EWeaponShootType::Single;
+		break;
+	}
 }
 
 
 void UTP_WeaponComponent::All_Reload_Implementation()
 {
-	// Try and play the sound if specified
-	if (ReloadSound != nullptr)
+	if (ReloadSound != nullptr && Character)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, ReloadSound, Character->GetActorLocation());
+	}
+}
+
+
+void UTP_WeaponComponent::All_StartCharging_Implementation()
+{
+	if (ChargeSound != nullptr && Character)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ChargeSound, Character->GetActorLocation());
 	}
 }
 
@@ -165,7 +261,7 @@ void UTP_WeaponComponent::AttachWeapon(AFPTestCharacter* TargetCharacter)
 	// If the Character already has a weapon, we destroy ourself
 	if (TargetCharacter->GetHasRifle())
 	{
-		Server_DestroySelf();
+		DestroySelf();
 		return;
 	}
 
@@ -190,14 +286,21 @@ void UTP_WeaponComponent::AttachWeapon(AFPTestCharacter* TargetCharacter)
 		if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerController->InputComponent))
 		{
 			// Fire
-			EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::Fire);
+			EnhancedInputComponent->BindAction(FireSingleAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::FireSingle);
+			EnhancedInputComponent->BindAction(FireAutomaticAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::FireAutomatic);
+			EnhancedInputComponent->BindAction(FireChargedAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::FireCharged);
+			EnhancedInputComponent->BindAction(FireChargedAction, ETriggerEvent::Started, this, &UTP_WeaponComponent::StartFireCharged);
 			// Reload
 			EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::Reload);
+			// Toggle Type
+			EnhancedInputComponent->BindAction(ToggleTypeAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::ToggleType);
 		}
 	}
 }
-void UTP_WeaponComponent::Server_DestroySelf_Implementation()
+
+void UTP_WeaponComponent::DestroySelf()
 {
+	// GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Destroy Weapon"));
 	GetOwner()->Destroy();
 }
 
@@ -215,4 +318,13 @@ void UTP_WeaponComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			Subsystem->RemoveMappingContext(FireMappingContext);
 		}
 	}
+}
+
+void UTP_WeaponComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	// Call the Super
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// Add properties to replicated for the derived class
+	DOREPLIFETIME(UTP_WeaponComponent, Character);
 }

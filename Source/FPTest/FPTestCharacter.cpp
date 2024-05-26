@@ -7,6 +7,11 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 
+#include "FPTestGameMode.h"
+
+#include "Net/UnrealNetwork.h"
+#include <Kismet/GameplayStatics.h>
+
 
 //////////////////////////////////////////////////////////////////////////
 // AFPTestCharacter
@@ -16,6 +21,9 @@ AFPTestCharacter::AFPTestCharacter()
 	// Character doesnt have a rifle at start
 	bHasRifle = false;
 	bReplicates = true;
+
+	// Set the Health to the max Amount
+	Health = MaxHealth;
 	
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
@@ -51,6 +59,27 @@ void AFPTestCharacter::BeginPlay()
 		}
 	}
 
+}
+
+void AFPTestCharacter::Server_OnDamageTaken_Implementation(uint32 Damage)
+{
+	// Reduce health by the damage amount
+	Health -= Damage;
+	if (Health < 0)
+	{
+		// This logic handles the respawn
+		// just did it for fun, gets the player start and teleports the player there instantly
+		AFPTestGameMode* GameMode = Cast<AFPTestGameMode>(UGameplayStatics::GetGameMode(GetWorld()));
+		AActor* PlayerStart = GameMode->FindPlayerStart(GetController());
+		if (!PlayerStart)
+			return;
+
+		// Also recover Health
+		Health = MaxHealth;
+		SetActorLocation(PlayerStart->GetActorLocation());
+	}
+
+	OnHealthChanged.Broadcast(Health);
 }
 
 //////////////////////////////////////////////////////////////////////////// Input
