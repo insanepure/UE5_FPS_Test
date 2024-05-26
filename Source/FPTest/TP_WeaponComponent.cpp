@@ -14,6 +14,8 @@ UTP_WeaponComponent::UTP_WeaponComponent()
 {
 	// Default offset from the character location for projectiles to spawn
 	MuzzleOffset = FVector(100.0f, 0.0f, 10.0f);
+	// Set the Ammunition to be the Magazine Value
+	CurrentAmmunition = MaxMagazine;
 }
 
 
@@ -30,6 +32,23 @@ void UTP_WeaponComponent::Fire()
 		return;
 	}
 
+	// if Ammunition reaches 0, we play the NoAmmo Sound
+	// It would be extremely weird if the Ammunition reaches below zero
+	// But as other people might also work with this and a value like this could be manipulated throughout the code (Which is bad tbh, but hard to manage when working with a big team)
+	// we just catch also cases below 0 and reset it, just to be safe
+	if (CurrentAmmunition <= 0)
+	{
+		CurrentAmmunition = 0;
+		// we have got no ammo, so just play a sound and skip firing
+		if (NoAmmoSound != nullptr)
+		{
+			UGameplayStatics::PlaySoundAtLocation(this, NoAmmoSound, Character->GetActorLocation());
+		}
+		return;
+	}
+
+	// Reduce ammunition by one
+	CurrentAmmunition--;
 
 	// This is the same logic as the Projectile firing
 	// we want to keep it as before and just transition to the line trace
@@ -79,6 +98,18 @@ void UTP_WeaponComponent::Fire()
 	}
 }
 
+void UTP_WeaponComponent::Reload()
+{
+	// Try and play the sound if specified
+	if (ReloadSound != nullptr)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ReloadSound, Character->GetActorLocation());
+	}
+	// Normally this would trigger an animation which disables firing
+	// There was nothing like this written in the document, so I keep it simple
+	CurrentAmmunition = MaxMagazine;
+}
+
 void UTP_WeaponComponent::AttachWeapon(AFPTestCharacter* TargetCharacter)
 {
 	Character = TargetCharacter;
@@ -107,6 +138,8 @@ void UTP_WeaponComponent::AttachWeapon(AFPTestCharacter* TargetCharacter)
 		{
 			// Fire
 			EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::Fire);
+			// Reload
+			EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::Reload);
 		}
 	}
 }

@@ -15,8 +15,16 @@ class FPTEST_API UTP_WeaponComponent : public USkeletalMeshComponent
 
 public:
 	/** Sound to play each time we fire */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Gameplay)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 	USoundBase* FireSound;
+
+	/** Sound to play when we cannot fire */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
+	USoundBase* NoAmmoSound;
+
+	/** Sound to play when we are reloading */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
+	USoundBase* ReloadSound;
 	
 	/** AnimMontage to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
@@ -27,12 +35,16 @@ public:
 	FVector MuzzleOffset;
 
 	/** MappingContext */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputMappingContext* FireMappingContext;
 
 	/** Fire Input Action */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* FireAction;
+
+	/** Reload Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	class UInputAction* ReloadAction;
 
 	/** End Distance of the Raycast for the Hit */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
@@ -42,6 +54,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 	float HitImpulse = 100000.0f;
 
+	/** How many ammunition the weapon can hold at Max */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
+	int32 MaxMagazine = 30;
+
 	/** Sets default values for this component's properties */
 	UTP_WeaponComponent();
 
@@ -50,8 +66,12 @@ public:
 	void AttachWeapon(AFPTestCharacter* TargetCharacter);
 
 	/** Make the weapon Fire a Projectile */
-	UFUNCTION(BlueprintCallable, Category="Weapon")
+	UFUNCTION(BlueprintCallable, Category = "Weapon")
 	void Fire();
+
+	/** Make the weapon Reload */
+	UFUNCTION(BlueprintCallable, Category = "Weapon")
+	void Reload();
 
 protected:
 	/** Ends gameplay for this component. */
@@ -61,4 +81,6 @@ protected:
 private:
 	/** The Character holding this weapon*/
 	AFPTestCharacter* Character;
+	/** Ammunition the weapon holds currently */
+	int CurrentAmmunition;
 };
