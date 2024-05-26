@@ -21,6 +21,8 @@ UTP_WeaponComponent::UTP_WeaponComponent()
 
 void UTP_WeaponComponent::Fire()
 {
+	// GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Fire"));
+
 	if (Character == nullptr || Character->GetController() == nullptr)
 	{
 		return;
@@ -38,6 +40,7 @@ void UTP_WeaponComponent::Fire()
 	// we just catch also cases below 0 and reset it, just to be safe
 	if (CurrentAmmunition <= 0)
 	{
+		// GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("No Ammo"));
 		CurrentAmmunition = 0;
 		// we have got no ammo, so just play a sound and skip firing
 		if (NoAmmoSound != nullptr)
@@ -62,8 +65,19 @@ void UTP_WeaponComponent::Fire()
 	// So for line tracing, we also need the forward Vector as well as the End Location
 	const FVector EndLocation = ((ForwardVector * HitCastMaxDistance) + StartLocation);
 
-	// Visualize the Trace
-	DrawDebugLine(World, StartLocation, EndLocation, FColor::Green, false, 1, 0, 1);
+	Server_FireTrace(StartLocation, EndLocation);
+}
+
+
+void UTP_WeaponComponent::Server_FireTrace_Implementation(FVector StartLocation, FVector EndLocation)
+{
+	// GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Server_FireTrace"));
+
+	UWorld* const World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
 
 	FHitResult OutHit;
 	FCollisionQueryParams CollisionParams;
@@ -79,13 +93,29 @@ void UTP_WeaponComponent::Fire()
 			DrawDebugSphere(World, OutHit.Location, 10.0f, 32, FColor::Red, false, 1, 0, 1);
 		}
 	}
-	
+
+	All_FireVisual(StartLocation, EndLocation);
+}
+
+void UTP_WeaponComponent::All_FireVisual_Implementation(FVector StartLocation, FVector EndLocation)
+{
+	UWorld* const World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("All_FireVisual"));
+
+	// Visualize the Trace
+	DrawDebugLine(World, StartLocation, EndLocation, FColor::Green, false, 1, 0, 1);
+
 	// Try and play the sound if specified
 	if (FireSound != nullptr)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, FireSound, Character->GetActorLocation());
 	}
-	
+
 	// Try and play a firing animation if specified
 	if (FireAnimation != nullptr)
 	{
@@ -100,14 +130,21 @@ void UTP_WeaponComponent::Fire()
 
 void UTP_WeaponComponent::Reload()
 {
+	// Normally this would trigger an animation which disables firing
+	// There was nothing like this written in the document, so I keep it simple
+	CurrentAmmunition = MaxMagazine;
+
+	All_Reload();
+}
+
+
+void UTP_WeaponComponent::All_Reload_Implementation()
+{
 	// Try and play the sound if specified
 	if (ReloadSound != nullptr)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, ReloadSound, Character->GetActorLocation());
 	}
-	// Normally this would trigger an animation which disables firing
-	// There was nothing like this written in the document, so I keep it simple
-	CurrentAmmunition = MaxMagazine;
 }
 
 void UTP_WeaponComponent::AttachWeapon(AFPTestCharacter* TargetCharacter)
@@ -116,10 +153,19 @@ void UTP_WeaponComponent::AttachWeapon(AFPTestCharacter* TargetCharacter)
 	{
 		return;
 	}
+
+	// Set the owner of the Weapon to the Character
+	// This allows us to receive Input as the client is now the owner
+	// But this would lead in PC games to cheating, where it would be possible to manipulate values
+	// like the magazine, which is now handled by the weapon
+	// We can leave it as it is as it was not a requirement
+	// but I still want to point out the issue
+	GetOwner()->SetOwner(TargetCharacter);
+
 	// If the Character already has a weapon, we destroy ourself
 	if (TargetCharacter->GetHasRifle())
 	{
-		GetOwner()->Destroy();
+		Server_DestroySelf();
 		return;
 	}
 
@@ -149,6 +195,10 @@ void UTP_WeaponComponent::AttachWeapon(AFPTestCharacter* TargetCharacter)
 			EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Triggered, this, &UTP_WeaponComponent::Reload);
 		}
 	}
+}
+void UTP_WeaponComponent::Server_DestroySelf_Implementation()
+{
+	GetOwner()->Destroy();
 }
 
 void UTP_WeaponComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)

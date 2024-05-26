@@ -69,9 +69,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Weapon")
 	void Fire();
 
+	/** Do the fire logic on the server */
+	UFUNCTION(Server, reliable, BlueprintCallable, Category = "Weapon")
+	void Server_FireTrace(FVector StartLocation, FVector EndLocation);
+
+	/* Do the Visual for everyone  */
+	UFUNCTION(NetMulticast, reliable, BlueprintCallable, Category = "Weapon")
+	void All_FireVisual(FVector StartLocation, FVector EndLocation);
+
 	/** Make the weapon Reload */
 	UFUNCTION(BlueprintCallable, Category = "Weapon")
 	void Reload();
+
+	/** Call of Reload executed for everyone to handle visual or sound */
+	UFUNCTION(netMulticast, reliable, BlueprintCallable, Category = "Weapon")
+	void All_Reload();
+
+	/** Attaches the actor to a FirstPersonCharacter */
+	UFUNCTION(Server, reliable, BlueprintCallable, Category = "Weapon")
+	void Server_DestroySelf();
 
 protected:
 	/** Ends gameplay for this component. */
