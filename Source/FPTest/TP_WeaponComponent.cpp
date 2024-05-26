@@ -3,7 +3,6 @@
 
 #include "TP_WeaponComponent.h"
 #include "FPTestCharacter.h"
-#include "FPTestProjectile.h"
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -24,24 +23,41 @@ void UTP_WeaponComponent::Fire()
 	{
 		return;
 	}
+	UWorld* const World = GetWorld();
 
-	// Try and fire a projectile
-	if (ProjectileClass != nullptr)
+	if (!World)
 	{
-		UWorld* const World = GetWorld();
-		if (World != nullptr)
+		return;
+	}
+
+
+	// This is the same logic as the Projectile firing
+	// we want to keep it as before and just transition to the line trace
+	APlayerController* PlayerController = Cast<APlayerController>(Character->GetController());
+	const FRotator SpawnRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
+
+	// For Forward Vector, we use the same logic as before, offsetting by MuzzleOffset
+	const FVector ForwardVector = SpawnRotation.RotateVector(MuzzleOffset);
+	const FVector StartLocation = GetOwner()->GetActorLocation() + ForwardVector;
+
+	// So for line tracing, we also need the forward Vector as well as the End Location
+	const FVector EndLocation = ((ForwardVector * HitCastMaxDistance) + StartLocation);
+
+	// Visualize the Trace
+	DrawDebugLine(World, StartLocation, EndLocation, FColor::Green, false, 1, 0, 1);
+
+	FHitResult OutHit;
+	FCollisionQueryParams CollisionParams;
+	if (GWorld->LineTraceSingleByProfile(OutHit, StartLocation, EndLocation, "Projectile", CollisionParams))
+	{
+		if (OutHit.bBlockingHit && OutHit.Component.IsValid() && OutHit.Component->IsSimulatingPhysics())
 		{
-			APlayerController* PlayerController = Cast<APlayerController>(Character->GetController());
-			const FRotator SpawnRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
-			// MuzzleOffset is in camera space, so transform it to world space before offsetting from the character location to find the final muzzle position
-			const FVector SpawnLocation = GetOwner()->GetActorLocation() + SpawnRotation.RotateVector(MuzzleOffset);
-	
-			//Set Spawn Collision Handling Override
-			FActorSpawnParameters ActorSpawnParams;
-			ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-	
-			// Spawn the projectile at the muzzle
-			World->SpawnActor<AFPTestProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
+			// Just to keep the same behavior as before, we keep the Impulse
+			// Normally we would also deal damage, spawn a decal or do something else here
+			// but we keep it as that for now
+			OutHit.Component->AddImpulseAtLocation(-OutHit.ImpactNormal * HitImpulse, OutHit.Location);
+			// Also visualize
+			DrawDebugSphere(World, OutHit.Location, 10.0f, 32, FColor::Red, false, 1, 0, 1);
 		}
 	}
 	

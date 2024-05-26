@@ -14,10 +14,6 @@ class FPTEST_API UTP_WeaponComponent : public USkeletalMeshComponent
 	GENERATED_BODY()
 
 public:
-	/** Projectile class to spawn */
-	UPROPERTY(EditDefaultsOnly, Category=Projectile)
-	TSubclassOf<class AFPTestProjectile> ProjectileClass;
-
 	/** Sound to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Gameplay)
 	USoundBase* FireSound;
@@ -37,6 +33,14 @@ public:
 	/** Fire Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
 	class UInputAction* FireAction;
+
+	/** End Distance of the Raycast for the Hit */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
+	float HitCastMaxDistance = 1000.0f;
+
+	/** Impulse to apply when hitting something */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
+	float HitImpulse = 100000.0f;
 
 	/** Sets default values for this component's properties */
 	UTP_WeaponComponent();
