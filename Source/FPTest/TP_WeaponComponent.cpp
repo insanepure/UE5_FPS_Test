@@ -112,11 +112,18 @@ void UTP_WeaponComponent::Reload()
 
 void UTP_WeaponComponent::AttachWeapon(AFPTestCharacter* TargetCharacter)
 {
-	Character = TargetCharacter;
-	if (Character == nullptr)
+	if (TargetCharacter == nullptr)
 	{
 		return;
 	}
+	// If the Character already has a weapon, we destroy ourself
+	if (TargetCharacter->GetHasRifle())
+	{
+		GetOwner()->Destroy();
+		return;
+	}
+
+	Character = TargetCharacter;
 
 	// Attach the weapon to the First Person Character
 	FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
